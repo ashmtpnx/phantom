@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phantom — Speak Freely</title>
+<!-- No Storage SDK needed anymore ✅ -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07070f;--sidebar:#0c0c1a;--surface:#111122;--surface2:#181830;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#e2e2f0;--muted:#6b6b8a;--dim:#3a3a5a;
+  --cyan:#00d4ff;--cyan-bg:rgba(0,212,255,0.1);--cyan-dim:rgba(0,212,255,0.06);
+  --amber:#ffb830;--amber-bg:rgba(255,184,48,0.1);
+  --red:#ff4f6a;--red-bg:rgba(255,79,106,0.1);
+  --green:#2ecc71;--green-bg:rgba(46,204,113,0.1);
+}
+body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;height:100vh;overflow:hidden}
+
+/* ── SETUP ── */
+#setup-screen{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center;padding:2rem}
+.setup-box{max-width:560px;width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:2.5rem}
+.setup-logo{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:var(--cyan);letter-spacing:-1px;margin-bottom:.3rem}
+.setup-tagline{font-size:13px;color:var(--muted);margin-bottom:.8rem}
+.free-badge{display:inline-flex;align-items:center;gap:6px;background:var(--green-bg);border:1px solid var(--green);color:var(--green);font-family:'DM Mono',monospace;font-size:11px;padding:4px 10px;border-radius:20px;margin-bottom:1.8rem}
+.setup-step{display:flex;gap:14px;margin-bottom:1.2rem;align-items:flex-start}
+.step-num{width:26px;height:26px;border-radius:50%;background:var(--cyan-bg);border:1px solid var(--cyan);color:var(--cyan);font-family:'DM Mono',monospace;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.step-text{font-size:14px;color:var(--text);line-height:1.6}
+.step-text a{color:var(--cyan);text-decoration:none}.step-text a:hover{text-decoration:underline}
+.step-text code{background:var(--surface2);padding:2px 7px;border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;color:var(--amber)}
+.step-note{font-size:12px;color:var(--muted);margin-top:3px}
+.config-area{margin-top:1.5rem}
+.config-label{font-size:12px;color:var(--muted);margin-bottom:8px;font-family:'DM Mono',monospace;letter-spacing:.05em}
+textarea#firebase-config{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;min-height:130px;resize:vertical;outline:none;transition:border-color .15s}
+textarea#firebase-config:focus{border-color:var(--cyan)}
+textarea#firebase-config::placeholder{color:var(--dim)}
+.setup-btn{width:100%;margin-top:12px;padding:13px;border-radius:10px;border:none;background:var(--cyan);color:#07070f;font-family:'Outfit',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .15s}
+.setup-btn:hover{opacity:.88}
+.setup-error{font-size:12px;color:var(--red);margin-top:8px;display:none}
+.setup-error.show{display:block}
+
+/* ── AUTH ── */
+#auth-screen{position:fixed;inset:0;background:var(--bg);z-index:90;display:none;align-items:center;justify-content:center;padding:2rem}
+.auth-box{max-width:380px;width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:2.5rem 2rem}
+.auth-brand{font-family:'DM Mono',monospace;font-size:22px;color:var(--cyan);margin-bottom:.3rem}
+.auth-sub{font-size:12px;color:var(--muted);margin-bottom:2rem}
+.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;background:var(--surface2);padding:4px;border-radius:10px;margin-bottom:1.5rem}
+.auth-tab{padding:8px;border-radius:7px;border:none;background:transparent;color:var(--muted);font-family:'Outfit',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
+.auth-tab.active{background:var(--surface);color:var(--text);border:1px solid var(--border2)}
+.auth-err{font-size:12px;color:var(--red);background:var(--red-bg);border-radius:8px;padding:8px 12px;margin-bottom:12px;display:none}
+.auth-err.show{display:block}
+.af{margin-bottom:12px}
+.af label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;font-family:'DM Mono',monospace;letter-spacing:.04em}
+.af input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;outline:none;transition:border-color .15s}
+.af input:focus{border-color:var(--cyan)}
+.af input::placeholder{color:var(--dim)}
+.auth-submit{width:100%;padding:12px;border-radius:9px;border:none;background:var(--cyan);color:#07070f;font-family:'Outfit',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-top:6px;transition:opacity .15s}
+.auth-submit:hover{opacity:.88}
+.auth-note{font-size:11px;color:var(--muted);text-align:center;margin-top:1rem;font-family:'DM Mono',monospace;line-height:1.7}
+
+/* ── APP ── */
+#app-screen{display:none;height:100vh}
+.app-layout{display:grid;grid-template-columns:260px 1fr;height:100vh;overflow:hidden}
+.sidebar{background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-top{padding:1rem;border-bottom:1px solid var(--border);flex-shrink:0}
+.brand{font-family:'DM Mono',monospace;font-size:20px;color:var(--cyan);letter-spacing:-0.5px}
+.brand span{font-size:11px;color:var(--muted);margin-left:6px;letter-spacing:0}
+.identity-card{margin-top:.8rem;background:var(--cyan-dim);border:1px solid rgba(0,212,255,0.15);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px}
+.id-icon{width:32px;height:32px;border-radius:50%;background:var(--cyan-bg);border:1px solid var(--cyan);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.id-label{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.05em}
+.id-name{font-size:13px;font-weight:500;color:var(--cyan);font-family:'DM Mono',monospace}
+.sidebar-section{padding:.8rem 1rem .4rem;font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.1em;display:flex;align-items:center;justify-content:space-between}
+.new-group-btn{width:18px;height:18px;border-radius:5px;background:var(--cyan-bg);border:1px solid var(--cyan);color:var(--cyan);font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.group-list{flex:1;overflow-y:auto;padding:.4rem .6rem}
+.group-list::-webkit-scrollbar{width:3px}
+.group-list::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+.group-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;transition:background .12s;margin-bottom:2px}
+.group-item:hover{background:var(--surface2)}
+.group-item.active{background:var(--cyan-dim);border:1px solid rgba(0,212,255,0.15)}
+.group-hash{font-family:'DM Mono',monospace;font-size:15px;color:var(--muted)}
+.group-item.active .group-hash{color:var(--cyan)}
+.group-name{font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.group-item.active .group-name{color:var(--cyan)}
+.sidebar-bottom{padding:1rem;border-top:1px solid var(--border);flex-shrink:0;display:flex;align-items:center}
+.logout-btn-s{margin-left:auto;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);background:transparent;border:1px solid var(--border);padding:5px 10px;border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s}
+.logout-btn-s:hover{color:var(--red);border-color:var(--red)}
+
+/* Chat */
+.chat-area{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.chat-header{padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0;background:var(--sidebar)}
+.chat-group-name{font-size:16px;font-weight:600}
+.chat-desc{font-size:12px;color:var(--muted);margin-top:1px}
+.anon-badge{margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;letter-spacing:.05em;white-space:nowrap}
+.no-chat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--dim)}
+.no-chat-icon{font-size:48px;margin-bottom:1rem}
+.no-chat p{font-family:'DM Mono',monospace;font-size:13px}
+.messages-wrap{flex:1;overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:2px}
+.messages-wrap::-webkit-scrollbar{width:3px}
+.messages-wrap::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+.day-divider{text-align:center;font-family:'DM Mono',monospace;font-size:10px;color:var(--dim);margin:1rem 0;position:relative}
+.day-divider::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:var(--border)}
+.day-divider span{background:var(--bg);padding:0 12px;position:relative}
+.msg{display:flex;flex-direction:column;padding:3px 0}
+.msg-meta{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;padding:0 2px}
+.msg-name{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--cyan)}
+.msg.self .msg-name{color:var(--amber)}
+.msg-time{font-family:'DM Mono',monospace;font-size:10px;color:var(--dim)}
+.msg-bubble{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px;max-width:72%;display:inline-block;word-break:break-word;line-height:1.5;font-size:14px;animation:msgIn .18s ease}
+.msg.self .msg-bubble{background:var(--amber-bg);border-color:rgba(255,184,48,0.2)}
+@keyframes msgIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.msg-img{max-width:280px;border-radius:10px;border:1px solid var(--border);cursor:pointer;display:block;margin-top:4px;animation:msgIn .18s ease}
+
+/* Input */
+.input-bar{padding:1rem 1.5rem;border-top:1px solid var(--border);background:var(--sidebar);flex-shrink:0}
+.file-preview{margin-bottom:8px;display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:13px}
+.file-preview-name{flex:1;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'DM Mono',monospace;font-size:12px}
+.file-preview-cancel{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1}
+.file-preview-cancel:hover{color:var(--red)}
+.img-preview-thumb{width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid var(--border)}
+.compress-status{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:6px;display:none}
+.compress-status.show{display:block}
+.input-wrap{display:flex;align-items:flex-end;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:8px 10px;transition:border-color .15s}
+.input-wrap:focus-within{border-color:var(--cyan)}
+.attach-btn{width:34px;height:34px;border-radius:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:color .15s;flex-shrink:0;position:relative}
+.attach-btn:hover{color:var(--cyan)}
+.attach-tooltip{position:absolute;bottom:42px;left:0;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap;display:none;pointer-events:none}
+.attach-btn:hover .attach-tooltip{display:block}
+#msg-input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;outline:none;resize:none;min-height:34px;max-height:120px;padding:6px 4px;line-height:1.5}
+#msg-input::placeholder{color:var(--dim)}
+.send-btn{width:34px;height:34px;border-radius:8px;background:var(--cyan);border:none;color:#07070f;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s}
+.send-btn:hover{opacity:.85}
+.send-btn:disabled{opacity:.4;cursor:not-allowed}
+.size-warning{font-size:11px;color:var(--amber);font-family:'DM Mono',monospace;margin-top:5px;display:none}
+.size-warning.show{display:block}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;align-items:center;justify-content:center;padding:2rem;backdrop-filter:blur(4px)}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:1.8rem;width:100%;max-width:380px}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:1.2rem}
+.modal input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;outline:none;transition:border-color .15s;margin-bottom:10px}
+.modal input:focus{border-color:var(--cyan)}
+.modal input::placeholder{color:var(--dim)}
+.modal-btns{display:flex;gap:8px;margin-top:.5rem}
+.modal-btn{flex:1;padding:10px;border-radius:9px;border:none;font-family:'Outfit',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.modal-btn.primary{background:var(--cyan);color:#07070f}
+.modal-btn.secondary{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.modal-btn:hover{opacity:.85}
+
+/* Toast & Lightbox */
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 18px;font-size:13px;font-family:'DM Mono',monospace;opacity:0;transition:all .3s;z-index:300;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:400;display:none;align-items:center;justify-content:center;cursor:zoom-out}
+#lightbox.show{display:flex}
+#lightbox img{max-width:90vw;max-height:90vh;border-radius:8px}
+
+@media(max-width:600px){.app-layout{grid-template-columns:1fr}.sidebar{display:none}}
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen">
+  <div class="setup-box">
+    <div class="setup-logo">phantom_</div>
+    <div class="setup-tagline">Anonymous group communication. Free. Private. Real-time.</div>
+    <div class="free-badge">✅ No Storage needed &nbsp;·&nbsp; 100% Free Firebase Spark Plan</div>
+
+    <div class="setup-step">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> → Create project
+        <div class="step-note">Sign in with Google. No credit card needed.</div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        Enable <code>Authentication</code> → Email/Password
+        <div class="step-note">Build → Authentication → Get started → Email/Password → Enable</div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        Enable <code>Firestore Database</code> → Start in test mode
+        <div class="step-note">Build → Firestore Database → Create database → Test mode → any region</div>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="step-num">4</div>
+      <div class="step-text">
+        Project Settings ⚙️ → Add Web App <code>&lt;/&gt;</code> → Copy config → Paste below
+        <div class="step-note">Skip Firebase Storage — images are compressed and saved directly ✅</div>
+      </div>
+    </div>
+
+    <div class="config-area">
+      <div class="config-label">PASTE YOUR FIREBASE CONFIG</div>
+      <textarea id="firebase-config" placeholder='{
+  apiKey: "AIzaSy...",
+  authDomain: "your-app.firebaseapp.com",
+  projectId: "your-app",
+  messagingSenderId: "...",
+  appId: "..."
+}'></textarea>
+      <div id="setup-error" class="setup-error"></div>
+      <button class="setup-btn" onclick="initFirebase()">Connect & Launch Phantom →</button>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-brand">phantom_</div>
+    <div class="auth-sub">Your identity stays hidden. Always.</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Login</button>
+      <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
+    </div>
+    <div id="auth-err" class="auth-err"></div>
+    <div class="af"><label>EMAIL</label><input type="email" id="auth-email" placeholder="your@email.com" /></div>
+    <div class="af"><label>PASSWORD</label><input type="password" id="auth-pass" placeholder="Min 6 characters" /></div>
+    <div class="af" id="conf-field" style="display:none"><label>CONFIRM PASSWORD</label><input type="password" id="auth-conf" placeholder="Repeat password" /></div>
+    <button class="auth-submit" id="auth-btn" onclick="handleAuth()">Login</button>
+    <div class="auth-note">You'll receive a random anonymous codename.<br>No one knows who you really are.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <div class="app-layout">
+    <div class="sidebar">
+      <div class="sidebar-top">
+        <div class="brand">phantom_ <span>v2.0</span></div>
+        <div class="identity-card">
+          <div class="id-icon" id="id-icon">👤</div>
+          <div>
+            <div class="id-label">YOUR CODENAME</div>
+            <div class="id-name" id="my-codename">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-section">GROUPS <div class="new-group-btn" onclick="openNewGroup()" title="New group">+</div></div>
+      <div class="group-list" id="group-list"><div style="padding:1rem;font-size:12px;color:var(--dim);font-family:'DM Mono',monospace">Loading...</div></div>
+      <div class="sidebar-bottom"><button class="logout-btn-s" onclick="doLogout()">Logout</button></div>
+    </div>
+
+    <div class="chat-area" id="chat-area">
+      <div class="no-chat" id="no-chat">
+        <div class="no-chat-icon">👻</div>
+        <p>Select a group to start talking</p>
+      </div>
+
+      <div id="chat-view" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div class="chat-header">
+          <div>
+            <div class="chat-group-name" id="chat-group-name">—</div>
+            <div class="chat-desc" id="chat-group-desc"></div>
+          </div>
+          <div class="anon-badge">🔒 All messages anonymous</div>
+        </div>
+        <div class="messages-wrap" id="messages-wrap"></div>
+        <div class="input-bar">
+          <div id="file-preview-bar" style="display:none" class="file-preview">
+            <img id="fp-thumb" class="img-preview-thumb" src="" alt="" />
+            <span class="file-preview-name" id="fp-name">image.jpg</span>
+            <button class="file-preview-cancel" onclick="clearFile()">×</button>
+          </div>
+          <div class="compress-status" id="compress-status">⚡ Compressing image...</div>
+          <div class="size-warning" id="size-warning">⚠️ Image too large even after compression. Try a smaller image.</div>
+          <div class="input-wrap">
+            <button class="attach-btn" onclick="document.getElementById('file-input').click()">
+              🖼️
+              <div class="attach-tooltip">Attach image (JPG, PNG, GIF)</div>
+            </button>
+            <input type="file" id="file-input" style="display:none" accept="image/*" onchange="handleFileSelect(this)" />
+            <textarea id="msg-input" placeholder="Type a message... (Shift+Enter for new line)" rows="1" onkeydown="msgKeydown(event)" oninput="autoResize(this)"></textarea>
+            <button class="send-btn" onclick="sendMessage()" id="send-btn">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Group Modal -->
+<div class="modal-overlay" id="new-group-modal">
+  <div class="modal">
+    <h3>Create New Group</h3>
+    <input type="text" id="ng-name" placeholder="Group name (e.g. Rant Zone)" maxlength="40" />
+    <input type="text" id="ng-desc" placeholder="Description (optional)" maxlength="80" />
+    <div class="modal-btns">
+      <button class="modal-btn secondary" onclick="closeModal('new-group-modal')">Cancel</button>
+      <button class="modal-btn primary" onclick="createGroup()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" onclick="this.classList.remove('show')"><img id="lightbox-img" src="" alt="" /></div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── CODENAME SYSTEM ── */
+const ADJ  = ['Silent','Dark','Swift','Bold','Calm','Wild','Sharp','Ghost','Cold','Clever','Quiet','Brave','Nimble','Stealth','Lone','Mystic','Neon','Iron','Frost','Storm'];
+const ANI  = ['Fox','Raven','Wolf','Hawk','Bear','Lynx','Tiger','Eagle','Panther','Cobra','Viper','Falcon','Puma','Jackal','Manta','Phantom','Cipher','Nova','Wraith','Specter'];
+const ICON = ['🦊','🐦','🐺','🦅','🐻','🐱','🐯','🦁','🐆','🐍','🐍','🦅','🐆','🐺','🦈','👻','🔐','⭐','👁️','🌀'];
+
+function getCodename(uid) {
+  let h = 0;
+  for (let c of uid) h = Math.imul(h, 31) + c.charCodeAt(0) | 0;
+  h = Math.abs(h);
+  return { name: ADJ[h % ADJ.length] + ' ' + ANI[(h >> 4) % ANI.length], icon: ICON[(h >> 4) % ICON.length] };
+}
+
+/* ── IMAGE COMPRESSION ── */
+// Compresses image to base64, targeting < 700KB for Firestore
+async function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = e => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        // Try progressively lower quality until < 700KB
+        const MAX_DIM = 900;
+        const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        let quality = 0.75;
+        let result = canvas.toDataURL('image/jpeg', quality);
+        while (result.length > 950000 && quality > 0.2) {
+          quality -= 0.1;
+          result = canvas.toDataURL('image/jpeg', quality);
+        }
+        if (result.length > 950000) { reject(new Error('too_large')); return; }
+        resolve(result);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ── FIREBASE ── */
+let db, auth, currentUser;
+let currentGroupId = null;
+let messagesUnsub = null;
+let pendingFile = null; // { base64, name, previewUrl }
+
+function initFirebase() {
+  const raw = document.getElementById('firebase-config').value.trim();
+  const errEl = document.getElementById('setup-error');
+  try {
+    let cfg;
+    try { cfg = JSON.parse(raw.replace(/(\w+)\s*:/g,'"$1":').replace(/'/g,'"')); }
+    catch(e) { cfg = eval('(' + raw + ')'); }
+    if (!cfg.apiKey || !cfg.projectId) throw new Error('Missing apiKey or projectId.');
+    firebase.initializeApp(cfg);
+    auth = firebase.auth();
+    db   = firebase.firestore();
+    localStorage.setItem('phantom_cfg', JSON.stringify(cfg));
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+    setupAuthListener();
+  } catch(e) {
+    errEl.textContent = 'Config error: ' + e.message;
+    errEl.classList.add('show');
+  }
+}
+
+function tryAutoInit() {
+  const saved = localStorage.getItem('phantom_cfg');
+  if (!saved) return;
+  try {
+    firebase.initializeApp(JSON.parse(saved));
+    auth = firebase.auth();
+    db   = firebase.firestore();
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+    setupAuthListener();
+  } catch(e) { localStorage.removeItem('phantom_cfg'); }
+}
+
+function setupAuthListener() {
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      currentUser = user;
+      const cn = getCodename(user.uid);
+      document.getElementById('my-codename').textContent = cn.name;
+      document.getElementById('id-icon').textContent = cn.icon;
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app-screen').style.display = 'block';
+      loadGroups();
+    } else {
+      currentUser = null;
+      document.getElementById('app-screen').style.display = 'none';
+      document.getElementById('auth-screen').style.display = 'flex';
+    }
+  });
+}
+
+/* ── AUTH ── */
+let authTab = 'login';
+
+function switchAuthTab(t) {
+  authTab = t;
+  document.getElementById('tab-login').className  = 'auth-tab' + (t==='login' ?' active':'');
+  document.getElementById('tab-signup').className = 'auth-tab' + (t==='signup'?' active':'');
+  document.getElementById('conf-field').style.display = t==='signup'?'block':'none';
+  document.getElementById('auth-btn').textContent = t==='login'?'Login':'Create Account';
+  setAuthErr('');
+}
+
+function setAuthErr(msg) {
+  const el = document.getElementById('auth-err');
+  el.textContent = msg;
+  el.className = 'auth-err' + (msg?' show':'');
+}
+
+async function handleAuth() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-pass').value;
+  if (!email) { setAuthErr('Enter your email.'); return; }
+  if (pass.length < 6) { setAuthErr('Password must be at least 6 characters.'); return; }
+  try {
+    if (authTab === 'signup') {
+      const conf = document.getElementById('auth-conf').value;
+      if (pass !== conf) { setAuthErr('Passwords do not match.'); return; }
+      await auth.createUserWithEmailAndPassword(email, pass);
+    } else {
+      await auth.signInWithEmailAndPassword(email, pass);
+    }
+  } catch(e) {
+    const m = {'auth/email-already-in-use':'Email already registered. Login instead.','auth/invalid-email':'Invalid email.','auth/wrong-password':'Wrong password.','auth/user-not-found':'No account found. Sign up first.','auth/weak-password':'Password too weak (min 6 chars).'};
+    setAuthErr(m[e.code] || e.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('auth-pass').addEventListener('keydown', e => { if(e.key==='Enter') handleAuth(); });
+  document.getElementById('auth-email').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('auth-pass').focus(); });
+  document.getElementById('ng-name').addEventListener('keydown', e => { if(e.key==='Enter') createGroup(); });
+});
+
+async function doLogout() {
+  if (!confirm('Log out of Phantom?')) return;
+  if (messagesUnsub) { messagesUnsub(); messagesUnsub = null; }
+  await auth.signOut();
+}
+
+/* ── GROUPS ── */
+function loadGroups() {
+  db.collection('groups').orderBy('createdAt').onSnapshot(snap => {
+    const list = document.getElementById('group-list');
+    if (snap.empty) {
+      list.innerHTML = '<div style="padding:1rem;font-size:12px;color:var(--dim);font-family:\'DM Mono\',monospace">No groups yet.<br>Create one with +</div>';
+      return;
+    }
+    list.innerHTML = snap.docs.map(doc => {
+      const d = doc.data(), active = doc.id===currentGroupId?' active':'';
+      return `<div class="group-item${active}" onclick="selectGroup('${doc.id}','${ej(d.name)}','${ej(d.description||'')}')">
+        <span class="group-hash">#</span>
+        <span class="group-name">${es(d.name)}</span>
+      </div>`;
+    }).join('');
+  });
+}
+
+function openNewGroup() { document.getElementById('new-group-modal').classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+async function createGroup() {
+  const name = document.getElementById('ng-name').value.trim();
+  const desc = document.getElementById('ng-desc').value.trim();
+  if (!name) { showToast('Enter a group name.'); return; }
+  await db.collection('groups').add({ name, description: desc, createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: currentUser.uid });
+  closeModal('new-group-modal');
+  document.getElementById('ng-name').value = '';
+  document.getElementById('ng-desc').value = '';
+  showToast('✅ Group created!');
+}
+
+/* ── MESSAGES ── */
+function selectGroup(id, name, desc) {
+  currentGroupId = id;
+  document.getElementById('no-chat').style.display = 'none';
+  const cv = document.getElementById('chat-view');
+  cv.style.display = 'flex'; cv.style.flexDirection = 'column';
+  document.getElementById('chat-group-name').textContent = '#' + name;
+  document.getElementById('chat-group-desc').textContent = desc || 'Anonymous group';
+  loadGroups();
+  loadMessages(id);
+}
+
+function loadMessages(groupId) {
+  if (messagesUnsub) messagesUnsub();
+  const wrap = document.getElementById('messages-wrap');
+  wrap.innerHTML = '<div style="text-align:center;padding:2rem;font-size:12px;color:var(--dim);font-family:\'DM Mono\',monospace">Loading messages...</div>';
+
+  messagesUnsub = db.collection('messages')
+    .where('groupId','==',groupId)
+    .orderBy('createdAt')
+    .onSnapshot(snap => {
+      if (snap.empty) {
+        wrap.innerHTML = '<div style="text-align:center;padding:2rem;font-size:12px;color:var(--dim);font-family:\'DM Mono\',monospace">No messages yet.<br>Be the first to say something.</div>';
+        return;
+      }
+      let html = '', lastDay = '';
+      snap.docs.forEach(doc => {
+        const d = doc.data();
+        const isSelf = d.uid === currentUser.uid;
+        const ts   = d.createdAt?.toDate?.() || new Date();
+        const day  = ts.toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'});
+        const time = ts.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+        if (day !== lastDay) {
+          html += `<div class="day-divider"><span>${day}</span></div>`;
+          lastDay = day;
+        }
+        const nameLabel = isSelf ? `You (${es(d.anonName)})` : es(d.anonName);
+        let body = '';
+        if (d.type === 'image') {
+          body = `<img src="${d.imageData}" class="msg-img" onclick="openLightbox('${ej(d.imageData)}')" loading="lazy" />`;
+        } else {
+          body = `<div class="msg-bubble">${es(d.content)}</div>`;
+        }
+        html += `<div class="msg${isSelf?' self':''}">
+          <div class="msg-meta">
+            <span class="msg-name">${nameLabel}</span>
+            <span class="msg-time">${time}</span>
+          </div>
+          ${body}
+        </div>`;
+      });
+      wrap.innerHTML = html;
+      wrap.scrollTop = wrap.scrollHeight;
+    });
+}
+
+/* ── FILE ── */
+async function handleFileSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('Only images supported (no Storage needed!)'); input.value=''; return; }
+
+  document.getElementById('compress-status').classList.add('show');
+  document.getElementById('size-warning').classList.remove('show');
+  document.getElementById('send-btn').disabled = true;
+
+  try {
+    const base64 = await compressImage(file);
+    pendingFile = { base64, name: file.name };
+
+    // Show preview
+    document.getElementById('fp-thumb').src = base64;
+    document.getElementById('fp-name').textContent = file.name + ' (compressed)';
+    document.getElementById('file-preview-bar').style.display = 'flex';
+    document.getElementById('compress-status').classList.remove('show');
+    showToast('✅ Image compressed & ready to send');
+  } catch(e) {
+    document.getElementById('compress-status').classList.remove('show');
+    if (e.message === 'too_large') {
+      document.getElementById('size-warning').classList.add('show');
+    } else {
+      showToast('Image error: ' + e.message);
+    }
+  }
+
+  document.getElementById('send-btn').disabled = false;
+  input.value = '';
+}
+
+function clearFile() {
+  pendingFile = null;
+  document.getElementById('file-preview-bar').style.display = 'none';
+  document.getElementById('size-warning').classList.remove('show');
+  document.getElementById('fp-thumb').src = '';
+}
+
+async function sendMessage() {
+  if (!currentGroupId) return;
+  const input  = document.getElementById('msg-input');
+  const text   = input.value.trim();
+  if (!text && !pendingFile) return;
+
+  document.getElementById('send-btn').disabled = true;
+  const anonName = getCodename(currentUser.uid).name;
+
+  try {
+    if (pendingFile) {
+      await db.collection('messages').add({
+        groupId: currentGroupId, uid: currentUser.uid, anonName,
+        type: 'image', imageData: pendingFile.base64,
+        content: '', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      clearFile();
+    }
+    if (text) {
+      input.value = ''; autoResize(input);
+      await db.collection('messages').add({
+        groupId: currentGroupId, uid: currentUser.uid, anonName,
+        type: 'text', content: text,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  } catch(e) {
+    showToast('Failed to send: ' + e.message);
+  }
+  document.getElementById('send-btn').disabled = false;
+}
+
+/* ── UTILS ── */
+function msgKeydown(e) { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+function openLightbox(src) { document.getElementById('lightbox-img').src=src; document.getElementById('lightbox').classList.add('show'); }
+function showToast(msg) {
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(showToast._t); showToast._t=setTimeout(()=>t.classList.remove('show'),2800);
+}
+function es(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ej(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('show'); }));
+
+tryAutoInit();
+</script>
+</body>
+</html>
